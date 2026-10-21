@@ -1,0 +1,16 @@
+# Vulnerable lab for PHP2SHELL — official image, no build required.
+# Change the image tag to target another affected version (8.2.34 / 8.3.35 / 8.4.26 / 8.5.11).
+#
+#   docker compose up -d
+#   python3 exploit.py -u http://127.0.0.1:8085/index.php --container php2shell-lab -c 'id>/tmp/x'
+#   docker compose down
+services:
+  target:
+    image: php:8.5.11-apache          # affected (fixed in 8.5.12). Also: 8.4.26 / 8.3.35 / 8.2.34
+    container_name: php2shell-lab
+    ports:
+      - "127.0.0.1:8085:80"           # bound to localhost only
+    volumes:
+      - ./lab.ini:/usr/local/etc/php/conf.d/zz-lab.ini:ro
+      - ./prefork.conf:/etc/apache2/mods-available/mpm_prefork.conf:ro
+      - ./app:/var/www/html:ro
