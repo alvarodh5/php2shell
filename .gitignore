@@ -1,0 +1,17 @@
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# exploit runtime artifacts / local notes
+out/
+runs/
+*.env
+*.log
+*.resp
+*.bin
