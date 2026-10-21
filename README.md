@@ -5,7 +5,7 @@
 chain, *"php2shell"*). No debugger, no `/proc`, no binary blob: addresses are leaked **in-band over
 HTTP** and the payload multipart body is built on the fly.
 
-![PHP2SHELL — in-band ASLR bypass to RCE on PHP 8.5.11](demo.png)
+![PHP2SHELL — in-band ASLR bypass to RCE on PHP 8.5.11](assets/demo.png)
 
 > ⚠️ For **authorized security testing, research and education only**, against systems you own or
 > are explicitly permitted to test. The affected versions are **already patched** (see below) and the
@@ -71,20 +71,39 @@ proof file and auto-derive offsets; the exploitation chain itself is 100% HTTP.
 
 ## Lab
 
-```yaml
-# docker-compose.yml — vulnerable target (single-worker prefork, display_errors=On)
-services:
-  target:
-    image: php:8.5.11-apache          # or 8.4.26-apache, etc.
-    ports: ["127.0.0.1:8085:80"]
-    volumes:
-      - ./lab.ini:/usr/local/etc/php/conf.d/zz-lab.ini:ro
-      - ./prefork.conf:/etc/apache2/mods-available/mpm_prefork.conf:ro
-      - ./app:/var/www/html:ro
+Everything to spin up a vulnerable target lives in [`lab/`](lab/). **No Dockerfile / no build** — it
+uses the stock official `php:X-apache` image and just mounts config on top:
+
+```
+lab/
+├── docker-compose.yml   # pulls php:8.5.11-apache and mounts the files below
+├── lab.ini              # php.ini overrides that make the target exploitable
+├── prefork.conf         # Apache MPM: a single prefork worker
+└── app/                 # the target page (plain <?php echo "OK"; no session_start needed)
 ```
 
-`lab.ini` and `prefork.conf` are included. The target page can be anything (e.g.
-`<?php echo "OK\n";`) — it does **not** need to call `session_start()`.
+```bash
+cd lab
+docker compose up -d
+python3 ../exploit.py -u http://127.0.0.1:8085/index.php --container php2shell-lab -c 'id>/tmp/x'
+docker compose down
+```
+
+Change the image tag in `lab/docker-compose.yml` to target another affected branch
+(`php:8.4.26-apache`, `php:8.3.35-apache`, `php:8.2.34-apache`).
+
+**Why these settings?** `lab.ini` reproduces an affected, default-ish PHP:
+
+| Setting | Why |
+|---|---|
+| `session.upload_progress.enabled = On` | the vulnerable feature — it is the attack vector (and is **on by default**) |
+| `display_errors = On` | the in-band `Set-Cookie` leak relies on this code path |
+| `memory_limit = 16M` | low enough that the exploit's large field triggers the OOM |
+| `session.use_strict_mode = 0`, `use_cookies = 1` | accept the attacker SID and emit the `Set-Cookie` the leak reads |
+
+`prefork.conf` forces a **single prefork worker** so sequential requests hit the same process
+(same address space) — required for the leak + reclaim to line up. These files describe the *target*,
+not the exploit.
 
 ## Offsets
 
